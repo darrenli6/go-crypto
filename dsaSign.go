@@ -6,6 +6,7 @@ import (
 	"fmt"
 )
 
+//直接对消息加密
 func main(){
   // Paramter代表私钥的参数
 
