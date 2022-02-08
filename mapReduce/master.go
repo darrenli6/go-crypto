@@ -33,8 +33,8 @@ func Sequential(
 
 			// 执行map任务
 			// map任务的调用次数由输入文件个数决定
-			for _,name:=range files  {
-				doMap(name,mapF)
+			for i,f:=range files  {
+				doMap(jobName,i,f,nReduce,mapF)
 			}
 
 			break;
@@ -42,7 +42,7 @@ func Sequential(
 
 			for i:=0;i<nReduce; i++{
 
-				doReduce("",reduceF)
+				doReduce(jobName,i,"",len(files),reduceF)
 			}
 
 

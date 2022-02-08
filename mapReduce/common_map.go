@@ -6,7 +6,12 @@ package mapReduce
 // 自定义分区标准
 
 
-func doMap(outFile string,reduceF func()){
+func doMap(
+	jobName string,
+	mapTaskNumber int,
+	inFile string,
+	nReduce int,
+	mapF func(file string,content string)  []KeyValue ){
 
 
 }
