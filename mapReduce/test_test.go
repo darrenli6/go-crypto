@@ -35,7 +35,12 @@ func MapFunc(file string,value string) (res []KeyValue){
 
 // 聚合函数
 
-func ReduceFunc(Key string,value []string) string {
+func ReduceFunc(key string,values []string) string {
+
+  for _,element :=range  values{
+
+  	fmt.Printf("reduce %s -%v \n",key,element)
+  }
 
   return ""
 
@@ -79,7 +84,7 @@ func makeInputs(num int) []string{
 		// 创建文件
 		file,err :=os.Create(names[f])
 		if err!=nil{
-			log.Fatalf("create input file [%s] failed  error : ",file,err)
+			log.Printf("create input file [%s] failed  error : %v ",file.Name(),err)
 		}
 
 		w:=bufio.NewWriter(file)

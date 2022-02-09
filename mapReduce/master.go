@@ -60,4 +60,14 @@ func newMaster() *Master {
 
 func (mr *Master) run(jobName string, files []string, nreduce int, schedule func(phase jobPhase)) {
 
+
+
+
+	// 顺序执行map任务
+
+	schedule(mapPhase)
+
+	// 执行reduce任务
+
+	schedule(reducePhase)
 }
