@@ -72,6 +72,12 @@ func main() {
 		//创建节点的make
 		Make(i)
 	}
+
+	// 防止选举没有完成，然main结束
+	for {
+
+	}
+
 }
 
 // 创建节点
@@ -130,13 +136,59 @@ func (rf *Raft) election() {
 		// 选出leader，停止循环，result=true
 		for !result {
 			// 选择leader
-			result = rf.election_ont_out(&leader)
+			result = rf.election_one_rand(&leader)
 		}
 	}
 }
 
+// 设置发送心跳信号的方法
+//只考虑leader没有挂的情况
 func (rf *Raft) sendLeaderHeartBeat() {
 
+	for {
+		select {
+		case <-rf.heartBeat:
+			//给leader返回确认信号
+
+		}
+	}
+}
+
+//返回给leader确认信号
+func (rf *Raft) sendAppendEntriesImpl() {
+	// 判断当前是否是leader节点
+	if rf.currentLeader == rf.me {
+		// 确认信号的节点个数
+		var success_count = 0
+
+		//返回确认信号的子节点
+		for i := 0; i < raftCount; i++ {
+			// 若不是当前子节点
+			if i != rf.me {
+				go func() {
+					// 确认信号的子节点 ，有没有回应
+					// 子节点返回
+					rf.hearbeatRe <- true
+				}()
+			}
+
+		}
+		//确认信号的子节点 若子节点 > raftCount /2 则校验成功
+		for i := 0; i < raftCount; i++ {
+			select {
+			case ok := <-rf.hearbeatRe:
+				if ok {
+					// 子节点确认的个数
+					success_count++
+					if success_count > raftCount/2 {
+						fmt.Println("投票选举成功，校验心跳成功")
+					}
+
+				}
+			}
+
+		}
+	}
 }
 
 func (rf *Raft) setTerm(term int) {
@@ -156,7 +208,7 @@ func millisecond() int64 {
 }
 
 // 选举leader
-func (rf *Raft) election_ont_out(leader Leader) bool {
+func (rf *Raft) election_one_rand(leader *Leader) bool {
 
 	// 超时时间
 	var timeout int64
@@ -203,14 +255,57 @@ func (rf *Raft) election_ont_out(leader Leader) bool {
 			select {
 			case ok := <-rf.electCh:
 				if ok {
+					vote++
+					// 大于总票数的一半
+					success = vote > raftCount/2
+					// 成为领导的状态
+					// 如果票数大于一半，且未发出心跳信号
+					if success && triggerHeartbeat {
+						// 选举成功
+						triggerHeartbeat = true
+						// 成为leader
+						rf.mu.Lock()
+						// 成为leader
 
+						rf.becomeLeader()
+						rf.mu.Unlock()
+
+						// 由leader向起来节点发送心跳
+						rf.heartBeat <- true
+
+						fmt.Println(rf.me, " 成为leader")
+
+						fmt.Println("leader 发送心跳信号 ")
+					}
 				}
 			}
 		}
 
+		// 如果间隔小于100ms ，
+		if (timeout+last) < millisecond() || vote >= raftCount/2 || rf.currentLeader > -1 {
+			// 结束循环
+			break
+		} else {
+			// 没有选出leader
+
+			select {
+			case <-time.After(time.Duration(10) + time.Millisecond):
+
+			}
+		}
 	}
 	return success
 
+}
+
+// 成为leader
+
+func (rf *Raft) becomeLeader() {
+	// 节点状态变为2 是leader
+
+	rf.state = 2
+
+	rf.currentLeader = rf.me
 }
 
 // 修改节点为candidate
