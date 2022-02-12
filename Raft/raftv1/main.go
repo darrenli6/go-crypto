@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
+	"net/http"
+	"net/rpc"
 	"sync"
 	"time"
 )
@@ -73,6 +76,14 @@ func main() {
 		Make(i)
 	}
 
+	// 服务端监听
+	rpc.Register(new(Raft))
+	rpc.HandleHTTP()
+	err := http.ListenAndServe(":8080", nil)
+	if err != nil {
+		log.Fatal("server failed ", err)
+	}
+
 	// 防止选举没有完成，然main结束
 	for {
 
@@ -88,7 +99,7 @@ func Make(me int) *Raft {
 	// 0 1 2 -1 都不投票
 	rf.votedFor = -1
 
-	//0 是folower状态
+	//0 是folower状态 1 candidate ,2 leader
 	rf.state = 0
 	rf.timeout = 0
 
@@ -123,7 +134,7 @@ func (rf *Raft) election() {
 	var result bool
 	// 循环投票
 	for {
-		timeout := randRange(150, 900)
+		timeout := randRange(1500, 3000)
 
 		// 设置最后一条消息的时间
 		rf.lastMessageTime = millisecond()
@@ -150,6 +161,7 @@ func (rf *Raft) sendLeaderHeartBeat() {
 		case <-rf.heartBeat:
 			//给leader返回确认信号
 
+			rf.sendAppendEntriesImpl()
 		}
 	}
 }
@@ -168,7 +180,27 @@ func (rf *Raft) sendAppendEntriesImpl() {
 				go func() {
 					// 确认信号的子节点 ，有没有回应
 					// 子节点返回
-					rf.hearbeatRe <- true
+					// 这里是单机版
+					//rf.hearbeatRe <- true
+
+					// 多机版  客户端消费
+					rp, err := rpc.DialHTTP("tcp", "127.0.0.1:8080")
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					//接受服务端发来的消息
+					var ok = false
+					er := rp.Call("Raft.Communication", Param{"helo "}, &ok)
+					if er != nil {
+						log.Fatal(er)
+					}
+
+					if ok {
+						// rpc通信的情况下 节点又返回
+						rf.hearbeatRe <- true
+					}
+
 				}()
 			}
 
@@ -182,6 +214,7 @@ func (rf *Raft) sendAppendEntriesImpl() {
 					success_count++
 					if success_count > raftCount/2 {
 						fmt.Println("投票选举成功，校验心跳成功")
+						log.Fatal("程序结束")
 					}
 
 				}
@@ -212,7 +245,7 @@ func (rf *Raft) election_one_rand(leader *Leader) bool {
 
 	// 超时时间
 	var timeout int64
-	timeout = 100
+	timeout = 200
 	// 投票数量
 	var vote int64
 	// 是否开启心跳方法
@@ -229,10 +262,11 @@ func (rf *Raft) election_one_rand(leader *Leader) bool {
 	rf.mu.Unlock()
 
 	// 开始选举
-	fmt.Println("start election leader")
+	fmt.Printf("candidate=%d start election leader", rf.me)
 
 	for {
-		// 便利所有节点进行投票
+		// 遍历所有节点进行投票
+
 		for i := 0; i < raftCount; i++ {
 			// 遍历到不是自己 进行来票
 			if i != rf.me {
@@ -260,7 +294,7 @@ func (rf *Raft) election_one_rand(leader *Leader) bool {
 					success = vote > raftCount/2
 					// 成为领导的状态
 					// 如果票数大于一半，且未发出心跳信号
-					if success && triggerHeartbeat {
+					if success && !triggerHeartbeat {
 						// 选举成功
 						triggerHeartbeat = true
 						// 成为leader
@@ -321,4 +355,16 @@ func (rf *Raft) becomeCondidate() {
 	// 是否有领导
 	rf.currentLeader = -1
 
+}
+
+// 分布式通信
+type Param struct {
+	Msg string
+}
+
+//等待客户端通信
+func (rf *Raft) Communication(p Param, a *bool) error {
+	fmt.Println(p.Msg)
+	*a = true
+	return nil
 }
