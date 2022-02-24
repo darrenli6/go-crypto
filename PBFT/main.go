@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"example.com/m/PBFT/network"
+	"goland/go-crypto/PBFT/network"
 )
 
 func main() {

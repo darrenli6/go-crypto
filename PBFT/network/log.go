@@ -3,7 +3,7 @@ package network
 import (
 	"fmt"
 
-	"../consensus"
+	"goland/go-crypto/PBFT/consensus"
 )
 
 func LogMsg(msg interface{}) {

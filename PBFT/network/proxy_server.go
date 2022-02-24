@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"../consensus"
+	"goland/go-crypto/PBFT/consensus"
 )
 
 type Server struct {
@@ -45,6 +45,7 @@ func (server *Server) setRoute() {
 
 //获得请求数据
 func (server *Server) getReq(writer http.ResponseWriter, request *http.Request) {
+	//创建请求消息对象
 	var msg consensus.RequestMsg
 
 	//对数据解码

@@ -42,6 +42,7 @@ const (
 )
 
 // lastSequenceID will be -1 if there is no last sequence ID.
+// 根据视图id
 func CreateState(viewID int64, lastSequenceID int64) *State {
 	return &State{
 		ViewID: viewID,
@@ -60,6 +61,7 @@ func (state *State) StartConsensus(request *RequestMsg) (*PrePrepareMsg, error) 
 
 	sequenceID := time.Now().UnixNano()
 
+	//根据最后提交的信息的编号为新的请求分配编号
 	if state.LastSequenceID != -1 {
 		for state.LastSequenceID >= sequenceID {
 			sequenceID += 1
@@ -67,19 +69,22 @@ func (state *State) StartConsensus(request *RequestMsg) (*PrePrepareMsg, error) 
 	}
 
 	fmt.Println()
+	//为请求分配编号
 	request.SequenceID = sequenceID
-
+	// 将请求消息存储到日志中
 	state.MsgLogs.ReqMsg = request
 
+	// hash  根据请求消息 生成hash
 	digest, err := digest(request)
 
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
 	}
+	// 修改当前状态
 
 	state.CurrentStage = PrePrepared
-
+	// 返回预分配消息
 	return &PrePrepareMsg{
 		ViewID:     state.ViewID,
 		SequenceID: sequenceID,

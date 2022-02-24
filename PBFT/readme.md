@@ -79,3 +79,26 @@ r  操作的结果
 
 
 - 如果多个消息，后来的消息存储到msgBuffer里面。msgBuffer是有限的，如果超出，Alarm 缓冲区的msgBuffer清理一下。
+
+
+```
+案例一：
+  http://localhost:1111/req?warTime=hello
+案例二：
+  windows和mac：
+    curl -H "Content-Type: applicaton/json" -X POST -d "{\"clientID\":\"ahnhwi\",\"operation\":\"GetMyName\",\"timestamp\":859381532}" http://localhost:1111/req
+  Linux：
+    curl -H "Content-Type: applicaton/json" -X POST -d '{"clientID":"ahnhwi","operation":"GetMyName","timestamp":859381532}' http://localhost:1111/req
+ 
+
+
+
+
+
+
+
+
+
+
+
+```

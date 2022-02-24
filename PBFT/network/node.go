@@ -18,7 +18,7 @@ type Node struct {
 	View *View
 
 	// 当前状态
-	CurrentState *consensus.Stage
+	CurrentState *consensus.State
 
 	//提交信息
 	CommittedMsgs []*consensus.RequestMsg
@@ -108,6 +108,9 @@ func (node *Node) Broadcast(msg interface{}, path string) map[string]error {
 			errorMap[nodeID] = err
 			continue
 		}
+		// localhost:5000
+		// localhost:5001
+		//localhost:5002
 
 		send(url+path, jsonMsg)
 	}
@@ -139,10 +142,12 @@ func (node *Node) Reply(msg *consensus.ReplyMsg) error {
 
 // GetReq can be called when the node's CurrentState is nil.
 // Consensus start procedure for the Primary.
+//
 func (node *Node) GetReq(reqMsg *consensus.RequestMsg) error {
 	LogMsg(reqMsg)
 
 	// Create a new state for the new consensus.
+	// 为当前节点创建新状态
 	err := node.createStateForNewConsensus()
 	if err != nil {
 		return err
@@ -247,19 +252,23 @@ func (node *Node) GetReply(msg *consensus.ReplyMsg) {
 
 func (node *Node) createStateForNewConsensus() error {
 	// Check if there is an ongoing consensus process.
+	// 检查现在是否正在进行共识
 	if node.CurrentState != nil {
 		return errors.New("another consensus is ongoing")
 	}
 
 	// Get the last sequence ID
 	var lastSequenceID int64
+	// 判断当前是否处理过请求消息
 	if len(node.CommittedMsgs) == 0 {
 		lastSequenceID = -1
 	} else {
+		// 取出本系统最后一次处理的消息
 		lastSequenceID = node.CommittedMsgs[len(node.CommittedMsgs)-1].SequenceID
 	}
 
 	// Create a new state for this new consensus process in the Primary
+	// 创建状态
 	node.CurrentState = consensus.CreateState(node.View.ID, lastSequenceID)
 
 	LogStage("Create the replica status", true)
@@ -269,6 +278,7 @@ func (node *Node) createStateForNewConsensus() error {
 
 func (node *Node) dispatchMsg() {
 	for {
+		// 从MsgEntrance取消息
 		select {
 
 		case msg := <-node.MsgEntrance:
@@ -291,21 +301,30 @@ func (node *Node) dispatchMsg() {
 
 func (node *Node) routeMsg(msg interface{}) []error {
 	switch msg.(type) {
+	// 请求消息
 	case *consensus.RequestMsg:
+		// 判断是否正在共识
 		if node.CurrentState == nil {
 			// Copy buffered messages first.
+			// 创建切片 用于处理请求消息
 			msgs := make([]*consensus.RequestMsg, len(node.MsgBuffer.ReqMsgs))
+
+			// 将缓冲区的消息拷贝到切片中
 			copy(msgs, node.MsgBuffer.ReqMsgs)
 
 			// Append a newly arrived message.
+			// 将最新的请求消息追加到切片
 			msgs = append(msgs, msg.(*consensus.RequestMsg))
 
 			// Empty the buffer.
+			// 清空缓冲区的请求消息
 			node.MsgBuffer.ReqMsgs = make([]*consensus.RequestMsg, 0)
 
 			// Send messages.
+			// 将消息发送到传送通道
 			node.MsgDelivery <- msgs
 		} else {
+			// 正在共识，所以该消息无法处理 暂时放到将该消息存储缓冲区内
 			node.MsgBuffer.ReqMsgs = append(node.MsgBuffer.ReqMsgs, msg.(*consensus.RequestMsg))
 		}
 	case *consensus.PrePrepareMsg:
@@ -321,12 +340,15 @@ func (node *Node) routeMsg(msg interface{}) []error {
 			node.MsgBuffer.PrePrepareMsgs = make([]*consensus.PrePrepareMsg, 0)
 
 			// Send messages.
+			// 发送到delivery
 			node.MsgDelivery <- msgs
 		} else {
 			node.MsgBuffer.PrePrepareMsgs = append(node.MsgBuffer.PrePrepareMsgs, msg.(*consensus.PrePrepareMsg))
 		}
 	case *consensus.VoteMsg:
+		// 区分一下 PrepareMsg CommitMsg
 		if msg.(*consensus.VoteMsg).MsgType == consensus.PrepareMsg {
+
 			if node.CurrentState == nil || node.CurrentState.CurrentStage != consensus.PrePrepared {
 				node.MsgBuffer.PrepareMsgs = append(node.MsgBuffer.PrepareMsgs, msg.(*consensus.VoteMsg))
 			} else {
@@ -344,21 +366,31 @@ func (node *Node) routeMsg(msg interface{}) []error {
 				node.MsgDelivery <- msgs
 			}
 		} else if msg.(*consensus.VoteMsg).MsgType == consensus.CommitMsg {
+
+			// 节点当前的状态为nil或者不是序号分配阶段，将相互信息存储到切片中
+			// 因为节点当前的状态为nil,说当前没有进行共识 ，如果不是序号分配阶段 说明共识还没有进行到相互交互阶段
+
 			if node.CurrentState == nil || node.CurrentState.CurrentStage != consensus.Prepared {
 				node.MsgBuffer.CommitMsgs = append(node.MsgBuffer.CommitMsgs, msg.(*consensus.VoteMsg))
 			} else {
 
 				// Copy buffered messages first.
+				// 创建切片
+
 				msgs := make([]*consensus.VoteMsg, len(node.MsgBuffer.CommitMsgs))
+				// 将缓冲区的消息复制到切片中中
 				copy(msgs, node.MsgBuffer.CommitMsgs)
 
 				// Append a newly arrived message.
+				// 将最新的消息也追加到切片中
 				msgs = append(msgs, msg.(*consensus.VoteMsg))
 
 				// Empty the buffer.
+				// 清空缓冲
 				node.MsgBuffer.CommitMsgs = make([]*consensus.VoteMsg, 0)
 
 				// Send messages.
+				// 将消息发送到传送通道
 				node.MsgDelivery <- msgs
 			}
 		}
@@ -411,6 +443,7 @@ func (node *Node) routeMsgWhenAlarmed() []error {
 func (node *Node) resolveMsg() {
 	for {
 		// Get buffered messages from the dispatcher.
+		// 从消息传送通道获取消息
 		msgs := <-node.MsgDelivery
 		switch msgs.(type) {
 
@@ -464,10 +497,12 @@ func (node *Node) alarmToDispatcher() {
 	}
 }
 
+// 处理客户端的请求消息
 func (node *Node) resolveRequestMsg(msgs []*consensus.RequestMsg) []error {
 	errs := make([]error, 0)
 
 	// Resolve messages
+	// 遍历消息切片，取出消息
 	for _, reqMsg := range msgs {
 		err := node.GetReq(reqMsg)
 		if err != nil {
